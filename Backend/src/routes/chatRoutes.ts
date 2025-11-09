@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { searchWeb, formatSearchResults } from "../services/searchService";
-import { getAIResponse } from "../services/aiService";
+import { getAIResponse, streamAIResponse } from "../services/aiService";
 
 const router = Router();
 
@@ -16,43 +16,52 @@ router.post("/", async (req: Request, res: Response) => {
   }
 
   try {
-    // Step 1: Send reasoning event
-    res.write(`data: ${JSON.stringify({ type: "reasoning", content: "Thinking about the query..." })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: "reasoning", content: "Thinking..." })}\n\n`);
 
-    // Step 2: Decide if web search is needed
-    const aiPlanPrompt = `You are an intelligent agent. 
-    The user asked: "${query}".
-    Decide if this requires web search for up-to-date facts. 
-    Respond with exactly one word: "yes" or "no".`;
+    const aiPlanPrompt = `You are an intelligent assistant.
+User query: "${query}"
+Decide if a web search is needed for up-to-date or factual information.
+Answer only "yes" or "no".`;
 
-    const aiPlan = await getAIResponse(aiPlanPrompt);
+    const aiPlan = (await getAIResponse(aiPlanPrompt)).trim().toLowerCase();
+    console.log("🧭 AI Decision:", aiPlan);
 
     let searchData = "";
-    if (aiPlan.toLowerCase().includes("yes")) {
-      // Step 3: Do tool call
+
+    if (aiPlan.startsWith("y")) {
       res.write(`data: ${JSON.stringify({ type: "tool_call", tool: "web_search", input: query })}\n\n`);
-
-      const searchResults = await searchWeb(query, 5);
-      const formattedResults = formatSearchResults(searchResults);
-
-      res.write(`data: ${JSON.stringify({
-        type: "tool_call",
-        tool: "web_search",
-        input: query,
-        output: formattedResults
-      })}\n\n`);
-
-      searchData = formattedResults;
+      const results = await searchWeb(query, 5);
+      const formatted = formatSearchResults(results);
+      res.write(`data: ${JSON.stringify({ type: "tool_result", tool: "web_search", output: formatted })}\n\n`);
+      searchData = formatted;
+    } else {
+      res.write(`data: ${JSON.stringify({ type: "reasoning", content: "No web search needed. Generating response..." })}\n\n`);
     }
 
-    // Step 4: Get final AI response
     const finalPrompt = searchData
-      ? `Use the following web data to answer the question:\n\n${searchData}\n\nQuestion: ${query}`
-      : query;
+      ? `Use the following web results to answer:\n\n${searchData}\n\nQuestion: ${query}`
+      : `Answer this clearly:\n\n${query}`;
 
-    const finalAnswer = await getAIResponse(finalPrompt);
+    res.write(`data: ${JSON.stringify({ type: "response_start" })}\n\n`);
 
-    res.write(`data: ${JSON.stringify({ type: "response", content: finalAnswer })}\n\n`);
+    // ✅ STREAM RESPONSE PROPERLY
+    try {
+      await streamAIResponse(finalPrompt, (chunk: string) => {
+        if (chunk && chunk.trim()) {
+          res.write(
+            `data: ${JSON.stringify({ type: "response_chunk", content: chunk })}\n\n`
+          );
+        }
+      });
+
+      // ✅ End signal for frontend
+      res.write(`data: ${JSON.stringify({ type: "response_end" })}\n\n`);
+    } catch (err) {
+      console.warn("⚠️ Streaming failed, falling back to one-shot mode");
+      const fallback = await getAIResponse(finalPrompt);
+      res.write(`data: ${JSON.stringify({ type: "response_chunk", content: fallback })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "response_end" })}\n\n`);
+    }
   } catch (err: any) {
     console.error("Chat route error:", err);
     res.write(`data: ${JSON.stringify({ type: "error", content: err.message })}\n\n`);

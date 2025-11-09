@@ -12,75 +12,96 @@ const ChatBox: React.FC = () => {
   const [input, setInput] = useState("");
   const chatRef = useRef<HTMLDivElement | null>(null);
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
+const sendMessage = async () => {
+  if (!input.trim()) return;
 
-    const userMessage: Message = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+  const userMessage: Message = { role: "user", content: input };
+  setMessages((prev) => [...prev, userMessage]);
+  setInput("");
 
-    try {
-      const response = await fetch("http://localhost:5000/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: input }),
-      });
+  try {
+    const response = await fetch("http://localhost:5000/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: input }),
+    });
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) return;
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
 
-      let assistantMessage = "";
+    if (!reader) return;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    let assistantMessage = "";
+    let hasAssistantStarted = false;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const events = chunk
-          .split("\n\n")
-          .filter((line) => line.startsWith("data: "));
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        for (const event of events) {
-          const data = event.replace("data: ", "");
-          try {
-            const json = JSON.parse(data);
-            if (json.type === "reasoning") {
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: "🤔 Thinking..." },
-              ]);
-            } else if (json.type === "tool_call") {
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: `🔍 Searching for: ${json.input}` },
-              ]);
-            } else if (json.type === "response") {
-              assistantMessage = json.content;
+      const chunk = decoder.decode(value, { stream: true });
+      const events = chunk
+        .split("\n\n")
+        .filter((line) => line.startsWith("data: "));
+
+      for (const event of events) {
+        const data = event.replace("data: ", "");
+
+        try {
+          const json = JSON.parse(data);
+
+          if (json.type === "reasoning") {
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content: "🤔 Thinking..." },
+            ]);
+          } else if (json.type === "tool_call") {
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content: `🔍 Searching for: ${json.input}` },
+            ]);
+          } else if (json.type === "tool_result") {
+            // optional: skip showing search results
+          } else if (json.type === "response") {
+            // live stream: append text instead of replacing
+            assistantMessage += json.content;
+
+            if (!hasAssistantStarted) {
+              hasAssistantStarted = true;
               setMessages((prev) => [
                 ...prev,
                 { role: "assistant", content: assistantMessage },
               ]);
-            } else if (json.type === "error") {
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: `❌ ${json.content}` },
-              ]);
+            } else {
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: assistantMessage,
+                };
+                return updated;
+              });
             }
-          } catch (err) {
-            console.error("Error parsing event:", err);
+          } else if (json.type === "error") {
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content: `❌ ${json.content}` },
+            ]);
           }
+        } catch (err) {
+          console.error("Error parsing event:", err);
         }
       }
-    } catch (err) {
-      console.error("Chat error:", err);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "❌ Failed to connect to backend." },
-      ]);
     }
-  };
+  } catch (err) {
+    console.error("Chat error:", err);
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: "❌ Failed to connect to backend." },
+    ]);
+  }
+};
 
+  
   return (
     <div className="chat-container">
       <h2 className="chat-title">🤖 Agentic Chat</h2>

@@ -1,9 +1,8 @@
 import React from "react";
-import ChatBox from "./components/ChatBox";
-import "./styles/App.css";
+import ChatInterface from "./components/ChatInterface";
 
 const App: React.FC = () => {
-  return <ChatBox />;
+  return <ChatInterface />;
 };
 
 export default App;
