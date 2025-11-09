@@ -4,6 +4,8 @@ import type { Message, EventMessage } from "../types";
 
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [tool_result, setToolResult] = useState<Message[]>([]);
+  const [reasoning, setReasoning] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [thinking, setThinking] = useState<string | null>(null);
 
@@ -48,9 +50,15 @@ export function useChat() {
   };
 
   const handleEvent = (event: EventMessage) => {
+
+    console.log("event",event)
+
     switch (event.type) {
       case "reasoning":
-        setThinking(event.content || "Thinking...");
+        setReasoning((prev) => [
+          ...prev,
+          { type: "reasoning", content: `Reasoning :\n${event.content}` },
+        ]);
         break;
 
       case "tool_call":
@@ -59,17 +67,10 @@ export function useChat() {
 
       case "tool_result":
         setThinking("Fetched search results...");
-        setMessages((prev) => [
+        setToolResult((prev) => [
           ...prev,
           { type: "system", content: `📄 Web Data:\n${event.output}` },
         ]);
-        break;
-
-      // legacy single-event streaming from backend: { type: "response", content: "..." }
-      case "response":
-        // ensure ai bubble exists, then append
-        ensureAiBubble();
-        appendToAiBubble(event.content || "");
         break;
 
       // chunked streaming lifecycle events (preferred)
@@ -84,7 +85,6 @@ export function useChat() {
         break;
 
       case "response_end":
-      case "done":
         endThinking();
         break;
 
@@ -120,7 +120,8 @@ export function useChat() {
         }
       }, 20000); // 20s safety timeout
     }
+    
   };
 
-  return { messages, sendMessage, loading, thinking };
+  return { messages, sendMessage, loading, thinking, tool_result, reasoning };
 }

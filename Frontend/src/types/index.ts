@@ -1,5 +1,5 @@
 export interface Message {
-  type: "user" | "ai" | "system";
+  type: "user" | "ai" | "system" | "tool_result" | "reasoning";
   content: string;
 }
 
@@ -11,8 +11,6 @@ export interface EventMessage {
     | "response_start"
     | "response_chunk"
     | "response_end"
-    | "response"
-    | "done"
     | "error";
   content?: string;
   tool?: string;

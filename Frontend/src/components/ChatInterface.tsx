@@ -6,7 +6,7 @@ import { useChat } from "../hooks/useChat";
 import "../styles/ChatInterface.css";
 
 const ChatInterface: React.FC = () => {
-  const { messages, sendMessage, thinking, loading } = useChat();
+  const { messages, sendMessage, thinking, loading, reasoning, tool_result } = useChat();
   const [input, setInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -30,7 +30,7 @@ const ChatInterface: React.FC = () => {
         </header>
 
         <main className="chat-content">
-          <MessageList messages={messages} />
+          <MessageList messages={messages} tool_result={tool_result} reasoning={reasoning}/>
           {thinking && <ThinkingProcess message={thinking} />}
           <div ref={chatEndRef}></div>
         </main>

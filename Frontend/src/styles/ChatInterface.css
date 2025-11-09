@@ -12,8 +12,8 @@
 /* 🪟 Chat Container */
 .chat-container {
   width: 90%;
-  max-width: 700px;
-  height: 90vh;
+  max-width: 850px;
+  height: 95vh;
   display: flex;
   flex-direction: column;
   background: rgba(25, 30, 50, 0.9);
@@ -21,7 +21,6 @@
   border-radius: 16px;
   backdrop-filter: blur(10px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  overflow: hidden;
 }
 
 /* 🧠 Header */
