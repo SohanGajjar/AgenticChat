@@ -1,0 +1,67 @@
+.input-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: background 0.2s ease-in-out;
+}
+
+.input-box:hover {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+/* 🌑 Input Field */
+.input-box input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(100, 116, 139, 0.4);
+  background-color: rgba(51, 65, 85, 0.3);
+  color: #f1f5f9;
+  font-size: 15px;
+  outline: none;
+  transition: all 0.2s ease-in-out;
+}
+
+.input-box input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+  background-color: rgba(71, 85, 105, 0.5);
+}
+
+.input-box input::placeholder {
+  color: #94a3b8;
+}
+
+/* 🚀 Send Button */
+.input-box button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #f8fafc;
+  font-weight: 500;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.input-box button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
+}
+
+.input-box button:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.input-box button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: rgba(100, 116, 139, 0.4);
+  box-shadow: none;
+}

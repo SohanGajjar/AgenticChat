@@ -1,130 +1,181 @@
-import React, { useState, useRef } from "react";
-import MessageBubble from "./MessageBubble";
+import React, { useEffect, useRef, useState } from "react";
+import { sendChatMessage } from "../services/apiService";
+import type { EventMessage, Message } from "../types";
 import "../styles/ChatBox.css";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
 
 const ChatBox: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [webResults, setWebResults] = useState<string[]>([]);
+  const [systemMessages, setSystemMessages] = useState<string[]>([]);
   const [input, setInput] = useState("");
-  const chatRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isWebPanelOpen, setIsWebPanelOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-const sendMessage = async () => {
-  if (!input.trim()) return;
+  // ✅ Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const userMessage: Message = { role: "user", content: input };
-  setMessages((prev) => [...prev, userMessage]);
-  setInput("");
-
-  try {
-    const response = await fetch("http://localhost:5000/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: input }),
-    });
-
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-
-    if (!reader) return;
-
-    let assistantMessage = "";
-    let hasAssistantStarted = false;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      const events = chunk
-        .split("\n\n")
-        .filter((line) => line.startsWith("data: "));
-
-      for (const event of events) {
-        const data = event.replace("data: ", "");
-
-        try {
-          const json = JSON.parse(data);
-
-          if (json.type === "reasoning") {
-            setMessages((prev) => [
-              ...prev,
-              { role: "assistant", content: "🤔 Thinking..." },
-            ]);
-          } else if (json.type === "tool_call") {
-            setMessages((prev) => [
-              ...prev,
-              { role: "assistant", content: `🔍 Searching for: ${json.input}` },
-            ]);
-          } else if (json.type === "tool_result") {
-            // optional: skip showing search results
-          } else if (json.type === "response") {
-            // live stream: append text instead of replacing
-            assistantMessage += json.content;
-
-            if (!hasAssistantStarted) {
-              hasAssistantStarted = true;
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: assistantMessage },
-              ]);
-            } else {
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantMessage,
-                };
-                return updated;
-              });
-            }
-          } else if (json.type === "error") {
-            setMessages((prev) => [
-              ...prev,
-              { role: "assistant", content: `❌ ${json.content}` },
-            ]);
-          }
-        } catch (err) {
-          console.error("Error parsing event:", err);
-        }
+  // ✅ Handle events from backend
+  const handleEvent = (event: EventMessage) => {
+    switch (event.type) {
+      case "response_start": {
+        setMessages((prev) => [...prev, { type: "ai", content: "" }]);
+        break;
       }
+
+      case "response_chunk": {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.type === "ai") {
+            last.content += event.content || "";
+          }
+          return updated;
+        });
+        break;
+      }
+
+      case "response_end": {
+        setLoading(false);
+        break;
+      }
+
+      // ✅ Handle web search results separately
+      case "tool_call":
+      case "tool_result": {
+        const candidateOutput =
+          typeof event.output === "string" && event.output.trim().length > 0
+            ? event.output
+            : typeof event.content === "string" && event.content.trim().length > 0
+            ? event.content
+            : undefined;
+
+        if (candidateOutput) {
+          setWebResults((prev) => [...prev, candidateOutput]);
+          setIsWebPanelOpen(true);
+        }
+        break;
+      }
+
+      // ✅ Handle system or error messages outside chat
+      case "error": {
+        const errMsg =
+          typeof event.content === "string" && event.content.trim().length > 0
+            ? event.content
+            : "An unknown error occurred.";
+        setSystemMessages((prev) => [...prev, errMsg]);
+        setLoading(false);
+        break;
+      }
+
+      default:
+        break;
     }
-  } catch (err) {
-    console.error("Chat error:", err);
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", content: "❌ Failed to connect to backend." },
-    ]);
-  }
-};
+  };
 
-  
+  // ✅ Send message
+  const handleSend = async () => {
+    if (!input.trim()) return;
+
+    setMessages((prev) => [...prev, { type: "user", content: input }]);
+    setInput("");
+    setLoading(true);
+
+    await sendChatMessage(input, handleEvent);
+  };
+
+  // ✅ Enter to send
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
-    <div className="chat-container">
-      <h2 className="chat-title">🤖 Agentic Chat</h2>
+    <div className="main-layout">
+      {/* ✅ Chat Section */}
+      <div className="chat-container">
+        <div className="chat-messages">
+          {messages
+            .filter((msg) => msg.type === "user" || msg.type === "ai")
+            .map((msg, index) => (
+              <div
+                key={index}
+                className={`chat-bubble ${
+                  msg.type === "user"
+                    ? "user-message"
+                    : "ai-message"
+                }`}
+              >
+                {msg.content}
+              </div>
+            ))}
 
-      <div ref={chatRef} className="chat-box">
-        {messages.map((msg, index) => (
-          <MessageBubble key={index} role={msg.role} content={msg.content} />
-        ))}
+          {loading && (
+            <div className="ai-message thinking">AI is thinking...</div>
+          )}
+
+          <div ref={messagesEndRef}></div>
+        </div>
+
+        <div className="chat-input-area">
+          <textarea
+            className="chat-input"
+            placeholder="Type your message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+          />
+          <button
+            onClick={handleSend}
+            disabled={loading}
+            className={`send-button ${loading ? "disabled" : ""}`}
+          >
+            {loading ? "..." : "Send"}
+          </button>
+        </div>
       </div>
 
-      <div className="chat-input-area">
-        <input
-          type="text"
-          value={input}
-          placeholder="Type your message..."
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          className="chat-input"
-        />
-        <button onClick={sendMessage} className="chat-send-btn">
-          Send
-        </button>
+      {/* ✅ Web Search Results Panel */}
+      <div className={`web-panel ${isWebPanelOpen ? "open" : ""}`}>
+        <div className="web-panel-header">
+          <h3>🔎 Web Search Results</h3>
+          <button
+            className="close-panel"
+            onClick={() => setIsWebPanelOpen(false)}
+          >
+            ✖
+          </button>
+        </div>
+
+        <div className="web-results">
+          {webResults.length === 0 ? (
+            <p className="empty-text">No web search results yet.</p>
+          ) : (
+            webResults.map((result, index) => (
+              <div key={index} className="web-result">
+                {result}
+              </div>
+            ))
+          )}
+        </div>
       </div>
+
+      {/* ✅ System Messages Below Chat */}
+      {systemMessages.length > 0 && (
+        <div className="system-messages">
+          <h4>⚙️ System Messages</h4>
+          {systemMessages.map((msg, index) => (
+            <p key={index} className="system-message">
+              {msg}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
